@@ -25,6 +25,7 @@
 #include "inet.h"				  /* make it first to avoid macro redefinitions */
 #include <openssl/ssl.h>		  /* SSL_() */
 #include <openssl/err.h>		  /* ERR_() */
+#include <openssl/x509v3.h>
 #ifdef WIN32
 #include <openssl/rand.h>		  /* RAND_seed() */
 #endif
@@ -201,6 +202,70 @@ _SSL_get_cert_info (struct cert_info *cert_info, SSL * ssl)
 		g_strlcat (cert_info->fingerprint, digits, sizeof(cert_info->fingerprint));
 	}
 
+	if (peer_cert->cert_info->extensions != NULL)
+	{
+		for (i = 0; i < sk_X509_EXTENSION_num (peer_cert->cert_info->extensions); i++)
+		{
+			ASN1_OBJECT *obj;
+			X509_EXTENSION *ext;
+			X509V3_EXT_METHOD *convert = NULL;
+			gchar *value = NULL;
+			const guchar *p;
+			int len;
+			int ni;
+			void *ext_str = NULL;
+
+			ext = sk_X509_EXTENSION_value (peer_cert->cert_info->extensions, i);
+			obj = X509_EXTENSION_get_object (ext);
+
+			ni = OBJ_obj2nid (obj);
+			if (ni != NID_subject_alt_name)
+				continue;
+
+			/* OpenSSL >= 1.0 returns a const here, but we need to be also   *
+			 * compatible with older versions that return a non-const value, *
+			 * hence the cast.
+			 */
+			if ((convert = (X509V3_EXT_METHOD *) X509V3_EXT_get (ext)) == NULL)
+				continue;
+
+			p = ext->value->data;
+			len = ext->value->length;
+			ext_str = ((convert->it != NULL) ?
+					   ASN1_item_d2i (NULL, &p, len, ASN1_ITEM_ptr (convert->it)) :
+					   convert->d2i (NULL, &p, len) );
+
+			if (ext_str == NULL)
+				continue;
+
+			if (convert->i2s != NULL)
+			{
+				value = convert->i2s (convert, ext_str);
+				g_message ("string: %s", value);
+				OPENSSL_free (value);
+			}
+			else if (convert->i2v != NULL)
+			{
+				int j;
+				STACK_OF(CONF_VALUE) *nval = convert->i2v (convert, ext_str, NULL);
+
+				for (j = 0; j < sk_CONF_VALUE_num (nval); j++)
+				{
+					CONF_VALUE *v = sk_CONF_VALUE_value(nval, j);
+
+					if (g_strcmp0 (v->name, "DNS") == 0)
+						g_message ("stack: %s", v->value);
+				}
+
+				sk_CONF_VALUE_pop_free(nval, X509V3_conf_free);
+			}
+
+			if (convert->it != NULL)
+				ASN1_item_free (ext_str, ASN1_ITEM_ptr (convert->it));
+			else
+				convert->ext_free (ext_str);
+		}
+	}
 
 	/* SSL_SESSION_print_fp(stdout, SSL_get_session(ssl)); */
 /*
