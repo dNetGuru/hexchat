@@ -1115,11 +1115,6 @@ main (int argc, char *argv[])
 	px_proxy_factory_free(libproxy_factory);
 #endif
 
-#ifdef USE_OPENSSL
-	if (ctx)
-		_SSL_context_free (ctx);
-#endif
-
 #ifdef WIN32
 	WSACleanup ();
 #endif
