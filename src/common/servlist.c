@@ -169,6 +169,12 @@ static const struct defaultserver def[] =
 	{"DeltaAnime", 0},
 	{0,			"irc.deltaanime.net"},
 
+	{"HIRCNetwork", 0},
+#ifdef USE_OPENSSL
+	{0,			"mHUB.HIRCNetwork.com/+6697"},
+#endif
+	{0,			"mHUB.HIRCNetwork.com"},
+
 	{"EFnet",	0},
 	{0,			"irc.blackened.com"},
 	{0,			"irc.Prison.NET"},
